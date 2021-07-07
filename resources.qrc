@@ -11,6 +11,7 @@
 <file alias="close">resources/icons/close.png</file>
 <file alias="fit-width">resources/icons/fit-width.png</file>
 <file alias="fit-window">resources/icons/fit-window.png</file>
+<file alias="auto-labelling">resources/icons/auto.png</file>
 <file alias="undo">resources/icons/undo.png</file>
 <file alias="hide">resources/icons/eye.png</file>
 <file alias="quit">resources/icons/quit.png</file>
