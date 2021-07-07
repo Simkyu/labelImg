@@ -9,6 +9,8 @@ import re
 import sys
 import subprocess
 import shutil
+import requests
+import json
 import webbrowser as wb
 
 from functools import partial
@@ -313,6 +315,9 @@ class MainWindow(QMainWindow, WindowMixin):
         fit_width = action(get_str('fitWidth'), self.set_fit_width,
                            'Ctrl+Shift+F', 'fit-width', get_str('fitWidthDetail'),
                            checkable=True, enabled=False)
+        auto_labeling = action(get_str('autoLabelling'), self.doing_auto_labelling,
+                           'Ctrl+B', 'auto-labelling', get_str('autoLabellingDetail'),
+                           checkable=True, enabled=False)
         # Group zoom controls into a list for easier toggling.
         zoom_actions = (self.zoom_widget, zoom_in, zoom_out,
                         zoom_org, fit_window, fit_width)
@@ -360,18 +365,21 @@ class MainWindow(QMainWindow, WindowMixin):
                               createMode=create_mode, editMode=edit_mode, advancedMode=advanced_mode,
                               shapeLineColor=shape_line_color, shapeFillColor=shape_fill_color,
                               zoom=zoom, zoomIn=zoom_in, zoomOut=zoom_out, zoomOrg=zoom_org,
-                              fitWindow=fit_window, fitWidth=fit_width,
+                              fitWindow=fit_window, fitWidth=fit_width, autoLabelling=auto_labeling,
                               zoomActions=zoom_actions,
                               fileMenuActions=(
                                   open, open_dir, save, save_as, close, reset_all, quit),
                               beginner=(), advanced=(),
                               editMenu=(edit, copy, delete,
-                                        None, color1, self.draw_squares_option),
+                                        None, color1, self.draw_squares_option, auto_labeling),
+                              # mouse right button
                               beginnerContext=(create, edit, copy, delete),
+                              # mouse right button
                               advancedContext=(create_mode, edit_mode, edit, copy,
                                                delete, shape_line_color, shape_fill_color),
+                              # when image is loaded
                               onLoadActive=(
-                                  close, create, create_mode, edit_mode),
+                                  close, create, create_mode, edit_mode, auto_labeling),
                               onShapesPresent=(save_as, hide_all, show_all))
 
         self.menus = Struct(
@@ -427,7 +435,7 @@ class MainWindow(QMainWindow, WindowMixin):
         self.actions.advanced = (
             open, open_dir, change_save_dir, open_next_image, open_prev_image, save, save_format, None,
             create_mode, edit_mode, None,
-            hide_all, show_all)
+            hide_all, show_all, auto_labeling)
 
         self.statusBar().showMessage('%s started.' % __appname__)
         self.statusBar().show()
@@ -1036,6 +1044,31 @@ class MainWindow(QMainWindow, WindowMixin):
             self.actions.fitWindow.setChecked(False)
         self.zoom_mode = self.FIT_WIDTH if value else self.MANUAL_ZOOM
         self.adjust_scale()
+
+    # send image to server and return bbox
+    def doing_auto_labelling(self, value=True):
+        if value:
+            self.actions.autoLabelling.setChecked(False)
+            url = "http://34.64.203.225/predict/image"
+
+            payload = {}
+            files = [
+                ('file', (os.path.basename(self.file_path), open(self.file_path, 'rb'), 'image/jpeg'))
+            ]
+            # if you send request with file(don't send headers)
+            headers = {
+                # 'accept': 'application/json',
+                # 'Content-Type': 'multipart/form-data'
+            }
+
+            response = requests.request("POST", url, headers=headers, data=payload, files=files)
+            print(self.file_path)
+
+            print(response.text)
+
+            # self.actions.fitWindow.setChecked(False)
+        # self.zoom_mode = self.FIT_WIDTH if value else self.MANUAL_ZOOM
+        # self.adjust_scale()
 
     def toggle_polygons(self, value):
         for item, shape in self.items_to_shapes.items():
