@@ -788,6 +788,7 @@ class MainWindow(QMainWindow, WindowMixin):
         self.actions.shapeLineColor.setEnabled(selected)
         self.actions.shapeFillColor.setEnabled(selected)
 
+    # TODO : insert autolabelling to that
     def add_label(self, shape):
         shape.paint_label = self.display_label_option.isChecked()
         item = HashableQListWidgetItem(shape.label)
@@ -811,6 +812,7 @@ class MainWindow(QMainWindow, WindowMixin):
         del self.items_to_shapes[item]
         self.update_combo_box()
 
+    # TODO : check this
     def load_labels(self, shapes):
         s = []
         for label, points, line_color, fill_color, difficult in shapes:
@@ -1045,30 +1047,75 @@ class MainWindow(QMainWindow, WindowMixin):
         self.zoom_mode = self.FIT_WIDTH if value else self.MANUAL_ZOOM
         self.adjust_scale()
 
+    # request labelling on server
+    def request_labelling(self):
+        # TODO : load connection config
+        url = "http://34.64.253.209/predict/image"
+
+        payload = {}
+        files = [
+            ('file', (os.path.basename(self.file_path), open(self.file_path, 'rb'), 'image/jpeg'))
+        ]
+        # if you send request with file(don't send headers)
+        headers = {
+            # 'accept': 'application/json',
+            # 'Content-Type': 'multipart/form-data'
+        }
+
+        response = requests.request("POST", url, headers=headers, data=payload, files=files)
+        # print(response.text)
+
+        return response.json()
+
+    # generate shape using auto lablleing result
+    def generate_shape(self, auto_labeling_result):
+        shape_list = []
+
+        for key in auto_labeling_result:
+            label = auto_labeling_result[key]["class"]
+
+            x_min = auto_labeling_result[key]["bbox"][0]
+            y_min = auto_labeling_result[key]["bbox"][1]
+            x_max = auto_labeling_result[key]["bbox"][2]
+            y_max = auto_labeling_result[key]["bbox"][3]
+
+            shape = Shape(label=label)
+
+            points = [(x_min, y_min), (x_max, y_min), (x_max, y_max), (x_min, y_max)]
+
+            if x_max - x_min <= 20:
+                pass
+
+            for x, y in points:
+                x, y, snapped = self.canvas.snap_point_to_canvas(x, y)
+                if snapped:
+                    self.set_dirty()
+
+                shape.add_point(QPointF(x, y))
+            shape.difficult = False
+            shape.close()
+            shape_list.append(shape)
+
+            shape.line_color = generate_color_by_text(label)
+            shape.fill_color = generate_color_by_text(label)
+
+            self.add_label(shape)
+            self.update_combo_box()
+
+        return shape_list
+
     # send image to server and return bbox
     def doing_auto_labelling(self, value=True):
         if value:
             self.actions.autoLabelling.setChecked(False)
-            url = "http://34.64.203.225/predict/image"
+            self.actions.save.setEnabled(True)
 
-            payload = {}
-            files = [
-                ('file', (os.path.basename(self.file_path), open(self.file_path, 'rb'), 'image/jpeg'))
-            ]
-            # if you send request with file(don't send headers)
-            headers = {
-                # 'accept': 'application/json',
-                # 'Content-Type': 'multipart/form-data'
-            }
+            auto_labeling_result = self.request_labelling()
+            shape_list = self.generate_shape(auto_labeling_result)
 
-            response = requests.request("POST", url, headers=headers, data=payload, files=files)
-            print(self.file_path)
-
-            print(response.text)
-
-            # self.actions.fitWindow.setChecked(False)
-        # self.zoom_mode = self.FIT_WIDTH if value else self.MANUAL_ZOOM
-        # self.adjust_scale()
+            # add generated shape to original shape list
+            self.canvas.shapes += shape_list
+            self.canvas.load_shapes(self.canvas.shapes)
 
     def toggle_polygons(self, value):
         for item, shape in self.items_to_shapes.items():
